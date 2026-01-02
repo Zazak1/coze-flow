@@ -9,6 +9,9 @@ class GlobalState(BaseModel):
     resume_url: str = Field(..., description="简历文件的链接")
     job_description: str = Field(..., description="岗位JD描述")
 
+    # 岗位分类
+    job_category: str = Field(default="未知", description="岗位类别：python_engineer/frontend_engineer/other")
+
     # 数据处理阶段
     resume_text: str = Field(default="", description="解析后的简历文本")
     anonymized_text: str = Field(default="", description="脱敏后的文本")
@@ -55,6 +58,17 @@ class GraphOutput(BaseModel):
 
 
 # ==================== 节点输入输出定义 ====================
+
+# --- 岗位分类节点 ---
+class JobCategoryInput(BaseModel):
+    """岗位分类节点输入"""
+    job_description: str = Field(..., description="岗位JD描述")
+
+
+class JobCategoryOutput(BaseModel):
+    """岗位分类节点输出"""
+    job_category: str = Field(..., description="岗位类别：python_engineer/frontend_engineer/other")
+
 
 # --- 文档解析节点 ---
 class DocumentParseInput(BaseModel):
@@ -206,6 +220,7 @@ class SaveToDatabaseOutput(BaseModel):
 # --- 最终报告生成节点 ---
 class GenerateReportInput(BaseModel):
     """最终报告生成节点输入"""
+    job_category: str = Field(default="未知", description="岗位类别")
     final_score: float = Field(default=0.0, description="最终得分")
     candidate_level: str = Field(default="未评估", description="候选人等级")
     interview_questions: List[str] = Field(default=[], description="面试题")

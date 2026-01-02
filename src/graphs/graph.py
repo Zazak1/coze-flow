@@ -8,6 +8,7 @@ from graphs.state import (
 )
 from graphs.node import (
     # 节点函数
+    job_category_node,
     document_parse_node,
     privacy_anonymize_node,
     structured_extract_node,
@@ -46,6 +47,10 @@ builder = StateGraph(GlobalState, input_schema=GraphInput, output_schema=GraphOu
 
 # ==================== 添加节点 ====================
 
+# 0. 岗位分类节点
+builder.add_node("job_category", job_category_node,
+                  metadata={"type": "agent", "llm_cfg": "config/job_category_cfg.json"})
+
 # 第一阶段：数据处理与隐私保护
 builder.add_node("document_parse", document_parse_node)
 builder.add_node("privacy_anonymize", privacy_anonymize_node,
@@ -79,8 +84,11 @@ builder.add_node("generate_report", generate_report_node)
 
 # ==================== 添加边 ====================
 
-# 设置入口点
-builder.set_entry_point("document_parse")
+# 设置入口点：先进行岗位分类
+builder.set_entry_point("job_category")
+
+# 岗位分类 -> 文档解析
+builder.add_edge("job_category", "document_parse")
 
 # 第一阶段：数据流转
 builder.add_edge("document_parse", "privacy_anonymize")

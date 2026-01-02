@@ -11,6 +11,8 @@ from jinja2 import Template
 from cozeloop.decorator import observe
 
 from graphs.state import (
+    # 岗位分类
+    JobCategoryInput, JobCategoryOutput,
     # 文档解析
     DocumentParseInput, DocumentParseOutput,
     # 隐私脱敏
@@ -93,6 +95,62 @@ def read_llm_config(config_file_path: str) -> dict:
 
 
 # ==================== 节点函数实现 ====================
+
+# --- 0. 岗位分类节点 ---
+def job_category_node(state: JobCategoryInput, config: RunnableConfig, runtime: Runtime[Context]) -> JobCategoryOutput:
+    """
+    title: 岗位分类
+    desc: 根据JD描述识别岗位类别：python_engineer/frontend_engineer/other
+    integrations: 大语言模型
+    """
+    ctx = runtime.context
+
+    # 读取配置文件
+    cfg_file = os.path.join(os.getenv("COZE_WORKSPACE_PATH"), config['metadata']['llm_cfg'])
+    with open(cfg_file, 'r', encoding='utf-8') as fd:
+        _cfg = json.load(fd)
+
+    llm_config = _cfg.get("config", {})
+    sp = _cfg.get("sp", "")
+    up = _cfg.get("up", "")
+
+    # 渲染 user prompt
+    up_tpl = Template(up)
+    user_prompt_content = up_tpl.render({"job_description": state.job_description})
+
+    # 组装消息
+    messages = [
+        SystemMessage(content=sp),
+        HumanMessage(content=user_prompt_content)
+    ]
+
+    # 调用 LLM
+    full_response = ""
+    for chunk in call_llm(ctx, messages, llm_config):
+        content = chunk.content if isinstance(chunk.content, str) else str(chunk.content)
+        full_response += content
+
+    # 解析结果
+    try:
+        # 尝试提取 JSON 部分
+        json_match = re.search(r'\{[\s\S]*\}', full_response)
+        if json_match:
+            result = json.loads(json_match.group())
+        else:
+            result = json.loads(full_response)
+
+        job_category = result.get("job_category", "other")
+
+        # 验证类别是否合法
+        valid_categories = ["python_engineer", "frontend_engineer", "other"]
+        if job_category not in valid_categories:
+            job_category = "other"
+
+        return JobCategoryOutput(job_category=job_category)
+    except Exception as e:
+        # 如果解析失败，默认返回 other
+        return JobCategoryOutput(job_category="other")
+
 
 # --- 1. 文档解析节点 ---
 def document_parse_node(state: DocumentParseInput, config: RunnableConfig, runtime: Runtime[Context]) -> DocumentParseOutput:
@@ -646,6 +704,7 @@ def generate_report_node(state: GenerateReportInput, config: RunnableConfig, run
 
     # 构建最终报告
     final_report = {
+        "job_category": state.job_category,
         "summary": {
             "final_score": state.final_score,
             "candidate_level": state.candidate_level,
